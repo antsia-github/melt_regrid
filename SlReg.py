@@ -42,7 +42,7 @@ class SlReg(CfReg):
     return dist
   
   
-  def regrid(self):
+  def regrid(self,meltpat=None, heatpat=None):
     bisicles_to_nemo_mapping_file = '/projects/jomp/asiaha/TEMP/DataSementara/u-bh845/bisicles-AIS_lev0_to_eORCA.map2d'
     
     level=0 # level of grid refinement
@@ -130,20 +130,32 @@ class SlReg(CfReg):
     
            sigslope = np.sum(slope)
            totcav = np.sum(slope>0.0)
-           scaling = totcav/sigslope*self.melt_water[j,i]
-           scalingheat = totcav/sigslope*self.melt_heat[j,i]
-           if math.isnan(scaling):
+           #scaling = totcav/sigslope*self.melt_water[j,i]
+           #scalingheat = totcav/sigslope*self.melt_heat[j,i]
+           #if math.isnan(scaling):
+           #   print 'i, j, ncontrib = ', i, j, ncontrib, totcav, sigslope, self.melt_water[j,i]
+           avgslope = sigslope/totcav
+           if math.isnan(avgslope):
               print 'i, j, ncontrib = ', i, j, ncontrib, totcav, sigslope, self.melt_water[j,i]
     
            for jcont in range(ncontrib):
                ji, jj = bn_map.x[j,i,jcont],bn_map.y[j,i,jcont]
-               bikemelt[jj,ji] = slope[jcont]*scaling   # this may be duplicated
-               bikeheat[jj,ji] = slope[jcont]*scalingheat   # this may be duplicated
+               #bikemelt[jj,ji] = slope[jcont]*scaling   # this may be duplicated
+               #bikeheat[jj,ji] = slope[jcont]*scalingheat   # this may be duplicated
+               if meltpat is None:
+                  coefmelt = self.melt_water[j,i]
+                  coefheat = self.melt_heat[j,i]
+               else:
+                  coefmelt = meltpat[jj,ji]
+                  coefheat = heatpat[jj,ji]
+
+               bikemelt[jj,ji] = slope[jcont]/avgslope * coefmelt
+               bikeheat[jj,ji] = slope[jcont]/avgslope * coefheat   # this may be duplicated
                if totcav == 0:
                   bikemelt[jj,ji] = 0.0
                   bikeheat[jj,ji] = 0.0
     
-    print sigslope, totcav, scaling
+    #print sigslope, totcav, scaling
     
     print bikemelt.shape
     
