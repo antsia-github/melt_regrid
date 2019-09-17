@@ -7,8 +7,8 @@ from amrfile import io as amrio
 import mapping_class as mp
 import math
 
-Clust = {}
-#Clust = {'PIG':[(52,186), (52,187), (53,186), (53,187), (54,186), (54,187), (55,186), (55,187), (53,188)], 'Thwaites':[(53,180),(53,181), (53,182), (52,183), (54,180), (54,181), (54,182)]}
+#Clust = {}
+Clust = {'PIG':[(52,186), (52,187), (53,186), (53,187), (54,186), (54,187), (55,186), (55,187), (53,188)], 'Thwaites':[(53,180),(53,181), (53,182), (52,183), (54,180), (54,181), (54,182)]}
 
 class Reg(object):
   def __init__(self,argin, argout):
@@ -204,6 +204,8 @@ class Reg(object):
     if self.isf is None:
       self.gen_bathy_isf()
 
+    meltconsv = np.zeros_like(self.melt)
+    heatconsv = np.zeros_like(self.heat)
     e1t=Dataset('/projects/ukesm/rsmith/NEMO_RSS/mesh_mask-be235.nc').variables['e1t'][0]
     e2t=Dataset('/projects/ukesm/rsmith/NEMO_RSS/mesh_mask-be235.nc').variables['e2t'][0]
     area = e1t*e2t
@@ -243,8 +245,8 @@ class Reg(object):
            for jcont in range(ncontrib):
                ji, jj = bn_map.x[j,i,jcont],bn_map.y[j,i,jcont]
  #-----> perhatikan kalo belon di-transpose 
-               self.melt[ji,jj] = self.melt[ji,jj] * self.melt_water[j,i] * self.water_unit_factor/avgmeltsub
-               self.heat[ji,jj] = self.heat[ji,jj] * self.melt_heat[j,i] * self.heat_unit_factor/avgheatsub
+               meltconsv[ji,jj] = self.melt[ji,jj] * self.melt_water[j,i] * self.water_unit_factor/avgmeltsub
+               heatconsv[ji,jj] = self.heat[ji,jj] * self.melt_heat[j,i] * self.heat_unit_factor/avgheatsub
 
     for idr in Clust.keys(): #for every region
       ListNemoCell = Clust[idr]
@@ -282,10 +284,15 @@ class Reg(object):
            ncontrib = np.int(bn_map.nmap[j,i])
            for jcont in range(ncontrib):
                ji, jj = bn_map.x[j,i,jcont],bn_map.y[j,i,jcont]
-               self.melt[ji,jj] = self.melt[ji,jj] * avgnemomelt/avgmeltsub
-               self.heat[ji,jj] = self.heat[ji,jj] * avgnemoheat/avgheatsub
+               meltconsv[ji,jj] = self.melt[ji,jj] * avgnemomelt/avgmeltsub
+               heatconsv[ji,jj] = self.heat[ji,jj] * avgnemoheat/avgheatsub
                totcont = totcont + 1
       print 'Conserving the melt idr, totcont = ', idr, totcont
+
+    self.melt[:,:] = meltconsv[:,:]
+    self.heat[:,:] = heatconsv[:,:]
+    del meltconsv; del heatconsv
+
 
   def gradslplon(self,ji,jj):
     slplon = []
