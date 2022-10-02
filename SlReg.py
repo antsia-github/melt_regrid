@@ -80,6 +80,8 @@ class SlReg(CfReg):
         if (np.abs(self.melt_water[j,i]) > 0):
            ncontrib = np.int(bn_map.nmap[j,i])
            slope = np.zeros(ncontrib)
+           slopexmelt = np.zeros(ncontrib)   # term needed to compute coefficient for melt conservation
+           slopexheat = np.zeros(ncontrib)
            for jcont in range(ncontrib):
                ji, jj = bn_map.x[j,i,jcont],bn_map.y[j,i,jcont]
                if (np.abs(isf[jj,ji] - bathy[jj,ji])  > 1E-3) \
@@ -122,19 +124,29 @@ class SlReg(CfReg):
                       slplat = 0.0
                    #slope[jcont] = np.max(np.array([slplonpl,slplonne,slplatpl,slplatne]))
                    slope[jcont] = math.sqrt(slplon**2 + slplat**2)
+                   if meltpat is None:
+                      #[slopexmelt[jcont], slopexheat[jcont]] = slope[jcont]* [ self.melt[j,i],selh.heat[j,i] ]
+                      slopexmelt[jcont]  = slope[jcont]* self.melt_water[j,i] * self.water_unit_factor
+                      slopexheat[jcont]  = slope[jcont]* self.melt_heat[j,i] * self.heat_unit_factor
+                   else:
+                      #[slopexmelt[jcont], slopexheat[jcont]] = slope[jcont]* [ meltpat[jj,ji],heatpat[jj,ji] ]
+                      slopexmelt[jcont] = slope[jcont] * meltpat[jj,ji]
+                      slopexheat[jcont] = slope[jcont] * heatpat[jj,ji] 
                    if math.isnan(slope[jcont]):
                       print 'i, j, jcont, ji, jj Nan = ', i, j, jcont, ji, jj
                else:
                  slope[jcont] = 0.0
-    
+                 slopexmelt[jcont] = 0.0; slopexheat[jcont] = 0.0
     
            sigslope = np.sum(slope)
            totcav = np.sum(slope>0.0)
+           sigslopexmelt = np.sum(slopexmelt); sigslopexheat = np.sum(slopexheat) # mungkin hanya perlu satu saja ?
            #scaling = totcav/sigslope*self.melt_water[j,i]
            #scalingheat = totcav/sigslope*self.melt_heat[j,i]
            #if math.isnan(scaling):
            #   print 'i, j, ncontrib = ', i, j, ncontrib, totcav, sigslope, self.melt_water[j,i]
            avgslope = sigslope/totcav
+           coefconsv = sigslope*self.melt_water[j,i]*self.water_unit_factor/sigslopexmelt  #liat penurunan rumus di catatan tgl 120819
            if math.isnan(avgslope):
               print 'i, j, ncontrib = ', i, j, ncontrib, totcav, sigslope, self.melt_water[j,i]
     
@@ -143,14 +155,14 @@ class SlReg(CfReg):
                #bikemelt[jj,ji] = slope[jcont]*scaling   # this may be duplicated
                #bikeheat[jj,ji] = slope[jcont]*scalingheat   # this may be duplicated
                if meltpat is None:
-                  coefmelt = self.melt_water[j,i]
-                  coefheat = self.melt_heat[j,i]
+                  coefmelt = self.melt_water[j,i] * self.water_unit_factor
+                  coefheat = self.melt_heat[j,i] * self.heat_unit_factor
                else:
-                  coefmelt = meltpat[jj,ji]
-                  coefheat = heatpat[jj,ji]
+                  coefmelt = meltpat[jj,ji]  # ini sama dgn self.melt dari CF regridding kan ??
+                  coefheat = heatpat[jj,ji]  # apakah perlu pake argumen di constructor ???
 
-               bikemelt[jj,ji] = slope[jcont]/avgslope * coefmelt
-               bikeheat[jj,ji] = slope[jcont]/avgslope * coefheat   # this may be duplicated
+               bikemelt[jj,ji] = slope[jcont]/avgslope * coefmelt * coefconsv 
+               bikeheat[jj,ji] = slope[jcont]/avgslope * coefheat * coefconsv 
                if totcav == 0:
                   bikemelt[jj,ji] = 0.0
                   bikeheat[jj,ji] = 0.0
@@ -161,14 +173,14 @@ class SlReg(CfReg):
     
     print 'sum(bikemelt) = ', np.sum(bikemelt)
     
-    bikemelt = bikemelt * self.water_unit_factor
+    #bikemelt = bikemelt * self.water_unit_factor
     maskisf=np.where(bikemelt==0,True,False)
     
     #melt=np.ma.array(bikemelt,mask=maskisf)
     #melt = np.ma.transpose(melt)
     self.melt = np.ma.transpose(bikemelt)
     
-    bikeheat = bikeheat * self.heat_unit_factor
+    #bikeheat = bikeheat * self.heat_unit_factor
     #heat=np.ma.array(bikeheat,mask=maskisf)
     #heat = np.ma.transpose(heat)
     self.heat = np.ma.transpose(bikeheat)
